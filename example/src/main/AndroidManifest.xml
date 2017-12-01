@@ -23,9 +23,9 @@
                 android:targetActivity="me.shaohui.shareutil._ShareActivity"
                 />
 
-        <activity android:name=".LoginActivity">
-        </activity>
         <activity android:name=".ShareActivity">
+        </activity>
+        <activity android:name=".LoginActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
 
