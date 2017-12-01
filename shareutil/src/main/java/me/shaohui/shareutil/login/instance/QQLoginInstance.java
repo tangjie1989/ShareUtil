@@ -6,11 +6,25 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.text.TextUtils;
+
 import com.tencent.tauth.IUiListener;
 import com.tencent.tauth.Tencent;
 import com.tencent.tauth.UiError;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
+
 import java.io.IOException;
 import java.util.List;
+
+import io.reactivex.BackpressureStrategy;
+import io.reactivex.Flowable;
+import io.reactivex.FlowableEmitter;
+import io.reactivex.FlowableOnSubscribe;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.schedulers.Schedulers;
 import me.shaohui.shareutil.ShareLogger;
 import me.shaohui.shareutil.ShareManager;
 import me.shaohui.shareutil.login.LoginListener;
@@ -22,13 +36,6 @@ import me.shaohui.shareutil.login.result.QQUser;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import org.json.JSONException;
-import org.json.JSONObject;
-import rx.Emitter;
-import rx.Observable;
-import rx.android.schedulers.AndroidSchedulers;
-import rx.functions.Action1;
-import rx.schedulers.Schedulers;
 
 import static me.shaohui.shareutil.ShareLogger.INFO;
 
@@ -94,12 +101,12 @@ public class QQLoginInstance extends LoginInstance {
 
     @Override
     public void fetchUserInfo(final BaseToken token) {
-        Observable.fromEmitter(new Action1<Emitter<QQUser>>() {
+
+        Flowable<QQUser> flowable = Flowable.create(new FlowableOnSubscribe<QQUser>() {
             @Override
-            public void call(Emitter<QQUser> qqUserEmitter) {
+            public void subscribe(FlowableEmitter<QQUser> qqUserEmitter) throws Exception {
                 OkHttpClient client = new OkHttpClient();
                 Request request = new Request.Builder().url(buildUserInfoUrl(token, URL)).build();
-
                 try {
                     Response response = client.newCall(request).execute();
                     JSONObject jsonObject = new JSONObject(response.body().string());
@@ -110,21 +117,65 @@ public class QQLoginInstance extends LoginInstance {
                     qqUserEmitter.onError(e);
                 }
             }
-        }, Emitter.BackpressureMode.DROP)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Action1<QQUser>() {
-                    @Override
-                    public void call(QQUser qqUser) {
-                        mLoginListener.loginSuccess(
-                                new LoginResult(LoginPlatform.QQ, token, qqUser));
-                    }
-                }, new Action1<Throwable>() {
-                    @Override
-                    public void call(Throwable throwable) {
-                        mLoginListener.loginFailure(new Exception(throwable));
-                    }
-                });
+        },BackpressureStrategy.DROP);
+
+        flowable.subscribeOn(Schedulers.io());
+        flowable.observeOn(AndroidSchedulers.mainThread());
+        flowable.subscribe(new Subscriber<QQUser>() {
+            @Override
+            public void onSubscribe(Subscription s) {
+
+            }
+
+            @Override
+            public void onNext(QQUser qqUser) {
+                mLoginListener.loginSuccess(
+                        new LoginResult(LoginPlatform.QQ, token, qqUser));
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                mLoginListener.loginFailure(new Exception(throwable));
+            }
+
+            @Override
+            public void onComplete() {
+
+            }
+        });
+
+
+//        Observable.fromEmitter(new Action1<Emitter<QQUser>>() {
+//            @Override
+//            public void call(Emitter<QQUser> qqUserEmitter) {
+//                OkHttpClient client = new OkHttpClient();
+//                Request request = new Request.Builder().url(buildUserInfoUrl(token, URL)).build();
+//
+//                try {
+//                    Response response = client.newCall(request).execute();
+//                    JSONObject jsonObject = new JSONObject(response.body().string());
+//                    QQUser user = QQUser.parse(token.getOpenid(), jsonObject);
+//                    qqUserEmitter.onNext(user);
+//                } catch (IOException | JSONException e) {
+//                    ShareLogger.e(INFO.FETCH_USER_INOF_ERROR);
+//                    qqUserEmitter.onError(e);
+//                }
+//            }
+//        }, BackpressureStrategy.DROP)
+//                .subscribeOn(Schedulers.io())
+//                .observeOn(AndroidSchedulers.mainThread())
+//                .subscribe(new Action1<QQUser>() {
+//                    @Override
+//                    public void call(QQUser qqUser) {
+//                        mLoginListener.loginSuccess(
+//                                new LoginResult(LoginPlatform.QQ, token, qqUser));
+//                    }
+//                }, new Action1<Throwable>() {
+//                    @Override
+//                    public void call(Throwable throwable) {
+//                        mLoginListener.loginFailure(new Exception(throwable));
+//                    }
+//                });
     }
 
     private String buildUserInfoUrl(BaseToken token, String base) {
