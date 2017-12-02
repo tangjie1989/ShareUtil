@@ -23,11 +23,11 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
         setContentView(R.layout.activity_login);
 
         ShareConfig config = ShareConfig.instance()
-                .qqId("XXXXXX")
-                .weiboId("XXXXX")
-                .wxId("XXXXX")
-                .weiboRedirectUrl("XXXXXX")
-                .wxSecret("XXXXXX");
+                .qqId(Constants.QQ_APP_ID)
+                .weiboId(Constants.WB_APP_ID)
+                .wxId(Constants.WX_APP_ID)
+                .weiboRedirectUrl(Constants.WB_REDIRECT_URL)
+                .wxSecret(Constants.WX_APP_SECRET);
         ShareManager.init(config);
 
         findViewById(R.id.login_qq).setOnClickListener(this);

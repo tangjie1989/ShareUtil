@@ -3,17 +3,31 @@ package me.shaohui.shareutil.share.instance;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.support.v4.util.Pair;
 
 import com.tencent.mm.sdk.modelbase.BaseReq;
 import com.tencent.mm.sdk.modelbase.BaseResp;
 import com.tencent.mm.sdk.modelmsg.SendMessageToWX;
+import com.tencent.mm.sdk.modelmsg.WXImageObject;
 import com.tencent.mm.sdk.modelmsg.WXMediaMessage;
 import com.tencent.mm.sdk.modelmsg.WXTextObject;
+import com.tencent.mm.sdk.modelmsg.WXWebpageObject;
 import com.tencent.mm.sdk.openapi.IWXAPI;
 import com.tencent.mm.sdk.openapi.IWXAPIEventHandler;
 import com.tencent.mm.sdk.openapi.WXAPIFactory;
 
+import io.reactivex.BackpressureStrategy;
+import io.reactivex.Flowable;
+import io.reactivex.FlowableEmitter;
+import io.reactivex.FlowableOnSubscribe;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.LongConsumer;
+import io.reactivex.schedulers.Schedulers;
 import me.shaohui.shareutil.ShareUtil;
+import me.shaohui.shareutil.share.ImageDecoder;
 import me.shaohui.shareutil.share.ShareImageObject;
 import me.shaohui.shareutil.share.ShareListener;
 import me.shaohui.shareutil.share.SharePlatform;
@@ -55,89 +69,89 @@ public class WxShareInstance implements ShareInstance {
     public void shareMedia(
             final int platform, final String title, final String targetUrl, final String summary,
             final ShareImageObject shareImageObject, final Activity activity, final ShareListener listener) {
-//        Observable.fromEmitter(new Action1<Emitter<byte[]>>() {
-//
-//            @Override
-//            public void call(Emitter<byte[]> emitter) {
-//                try {
-//                    String imagePath = ImageDecoder.decode(activity, shareImageObject);
-//                    emitter.onNext(ImageDecoder.compress2Byte(imagePath, TARGET_SIZE, THUMB_SIZE));
-//                } catch (Exception e) {
-//                    emitter.onError(e);
-//                }
-//            }
-//        }, Emitter.BackpressureMode.DROP)
-//                .subscribeOn(Schedulers.io())
-//                .observeOn(AndroidSchedulers.mainThread())
-//                .doOnRequest(new Action1<Long>() {
-//                    @Override
-//                    public void call(Long aLong) {
-//                        listener.shareRequest();
-//                    }
-//                })
-//                .subscribe(new Action1<byte[]>() {
-//                    @Override
-//                    public void call(byte[] bytes) {
-//                        WXWebpageObject webpageObject = new WXWebpageObject();
-//                        webpageObject.webpageUrl = targetUrl;
-//
-//                        WXMediaMessage message = new WXMediaMessage(webpageObject);
-//                        message.title = title;
-//                        message.description = summary;
-//                        message.thumbData = bytes;
-//
-//                        sendMessage(platform, message, buildTransaction("webPage"));
-//                    }
-//                }, new Action1<Throwable>() {
-//                    @Override
-//                    public void call(Throwable throwable) {
-//                        activity.finish();
-//                        listener.shareFailure(new Exception(throwable));
-//                    }
-//                });
+
+        Flowable.create(new FlowableOnSubscribe<byte[]>() {
+            @Override
+            public void subscribe(FlowableEmitter<byte[]> emitter) throws Exception {
+                try {
+                    String imagePath = ImageDecoder.decode(activity, shareImageObject);
+                    emitter.onNext(ImageDecoder.compress2Byte(imagePath, TARGET_SIZE, THUMB_SIZE));
+                } catch (Exception e) {
+                    emitter.onError(e);
+                }
+            }
+        }, BackpressureStrategy.DROP)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnRequest(new LongConsumer() {
+                    @Override
+                    public void accept(long t) throws Exception {
+                        listener.shareRequest();
+                    }
+                })
+                .subscribe(new Consumer<byte[]>() {
+                    @Override
+                    public void accept(byte[] bytes) throws Exception {
+                        WXWebpageObject webpageObject = new WXWebpageObject();
+                        webpageObject.webpageUrl = targetUrl;
+
+                        WXMediaMessage message = new WXMediaMessage(webpageObject);
+                        message.title = title;
+                        message.description = summary;
+                        message.thumbData = bytes;
+
+                        sendMessage(platform, message, buildTransaction("webPage"));
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        activity.finish();
+                        listener.shareFailure(new Exception(throwable));
+                    }
+                });
     }
 
     @Override
     public void shareImage(final int platform, final ShareImageObject shareImageObject,
-            final Activity activity, final ShareListener listener) {
-//        Observable.fromEmitter(new Action1<Emitter<Pair<Bitmap, byte[]>>>() {
-//            @Override
-//            public void call(Emitter<Pair<Bitmap, byte[]>> emitter) {
-//                try {
-//                    String imagePath = ImageDecoder.decode(activity, shareImageObject);
-//                    emitter.onNext(Pair.create(BitmapFactory.decodeFile(imagePath),
-//                            ImageDecoder.compress2Byte(imagePath, TARGET_SIZE, THUMB_SIZE)));
-//                } catch (Exception e) {
-//                    emitter.onError(e);
-//                }
-//            }
-//        }, Emitter.BackpressureMode.BUFFER)
-//                .subscribeOn(Schedulers.io())
-//                .observeOn(AndroidSchedulers.mainThread())
-//                .doOnRequest(new Action1<Long>() {
-//                    @Override
-//                    public void call(Long aLong) {
-//                        listener.shareRequest();
-//                    }
-//                })
-//                .subscribe(new Action1<Pair<Bitmap, byte[]>>() {
-//                    @Override
-//                    public void call(Pair<Bitmap, byte[]> pair) {
-//                        WXImageObject imageObject = new WXImageObject(pair.first);
-//
-//                        WXMediaMessage message = new WXMediaMessage();
-//                        message.mediaObject = imageObject;
-//                        message.thumbData = pair.second;
-//
-//                        sendMessage(platform, message, buildTransaction("image"));
-//                    }
-//                }, new Action1<Throwable>() {
-//                    @Override
-//                    public void call(Throwable throwable) {
-//                        activity.finish();
-//                        listener.shareFailure(new Exception(throwable));
-//                    }
-//                });
+                           final Activity activity, final ShareListener listener) {
+
+        Flowable.create(new FlowableOnSubscribe<Pair<Bitmap, byte[]>>() {
+            @Override
+            public void subscribe(FlowableEmitter<Pair<Bitmap, byte[]>> emitter) throws Exception {
+                try {
+                    String imagePath = ImageDecoder.decode(activity, shareImageObject);
+                    emitter.onNext(Pair.create(BitmapFactory.decodeFile(imagePath),
+                            ImageDecoder.compress2Byte(imagePath, TARGET_SIZE, THUMB_SIZE)));
+                } catch (Exception e) {
+                    emitter.onError(e);
+                }
+            }
+        }, BackpressureStrategy.DROP)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnRequest(new LongConsumer() {
+                    @Override
+                    public void accept(long t) throws Exception {
+                        listener.shareRequest();
+                    }
+                })
+                .subscribe(new Consumer<Pair<Bitmap, byte[]>>() {
+                    @Override
+                    public void accept(Pair<Bitmap, byte[]> pair) throws Exception {
+                        WXImageObject imageObject = new WXImageObject(pair.first);
+                        WXMediaMessage message = new WXMediaMessage();
+                        message.mediaObject = imageObject;
+                        message.thumbData = pair.second;
+
+                        sendMessage(platform, message, buildTransaction("image"));
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        activity.finish();
+                        listener.shareFailure(new Exception(throwable));
+                    }
+                });
     }
 
     @Override

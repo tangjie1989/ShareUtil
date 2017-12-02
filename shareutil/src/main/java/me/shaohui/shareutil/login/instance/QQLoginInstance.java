@@ -13,8 +13,6 @@ import com.tencent.tauth.UiError;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 
 import java.io.IOException;
 import java.util.List;
@@ -24,6 +22,7 @@ import io.reactivex.Flowable;
 import io.reactivex.FlowableEmitter;
 import io.reactivex.FlowableOnSubscribe;
 import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.functions.Consumer;
 import io.reactivex.schedulers.Schedulers;
 import me.shaohui.shareutil.ShareLogger;
 import me.shaohui.shareutil.ShareManager;
@@ -56,7 +55,7 @@ public class QQLoginInstance extends LoginInstance {
     private LoginListener mLoginListener;
 
     public QQLoginInstance(Activity activity, final LoginListener listener,
-            final boolean fetchUserInfo) {
+                           final boolean fetchUserInfo) {
         super(activity, listener, fetchUserInfo);
         mTencent = Tencent.createInstance(ShareManager.CONFIG.getQqId(),
                 activity.getApplicationContext());
@@ -102,7 +101,7 @@ public class QQLoginInstance extends LoginInstance {
     @Override
     public void fetchUserInfo(final BaseToken token) {
 
-        Flowable<QQUser> flowable = Flowable.create(new FlowableOnSubscribe<QQUser>() {
+        Flowable.create(new FlowableOnSubscribe<QQUser>() {
             @Override
             public void subscribe(FlowableEmitter<QQUser> qqUserEmitter) throws Exception {
                 OkHttpClient client = new OkHttpClient();
@@ -117,65 +116,21 @@ public class QQLoginInstance extends LoginInstance {
                     qqUserEmitter.onError(e);
                 }
             }
-        },BackpressureStrategy.DROP);
-
-        flowable.subscribeOn(Schedulers.io());
-        flowable.observeOn(AndroidSchedulers.mainThread());
-        flowable.subscribe(new Subscriber<QQUser>() {
-            @Override
-            public void onSubscribe(Subscription s) {
-
-            }
-
-            @Override
-            public void onNext(QQUser qqUser) {
-                mLoginListener.loginSuccess(
-                        new LoginResult(LoginPlatform.QQ, token, qqUser));
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                mLoginListener.loginFailure(new Exception(throwable));
-            }
-
-            @Override
-            public void onComplete() {
-
-            }
-        });
-
-
-//        Observable.fromEmitter(new Action1<Emitter<QQUser>>() {
-//            @Override
-//            public void call(Emitter<QQUser> qqUserEmitter) {
-//                OkHttpClient client = new OkHttpClient();
-//                Request request = new Request.Builder().url(buildUserInfoUrl(token, URL)).build();
-//
-//                try {
-//                    Response response = client.newCall(request).execute();
-//                    JSONObject jsonObject = new JSONObject(response.body().string());
-//                    QQUser user = QQUser.parse(token.getOpenid(), jsonObject);
-//                    qqUserEmitter.onNext(user);
-//                } catch (IOException | JSONException e) {
-//                    ShareLogger.e(INFO.FETCH_USER_INOF_ERROR);
-//                    qqUserEmitter.onError(e);
-//                }
-//            }
-//        }, BackpressureStrategy.DROP)
-//                .subscribeOn(Schedulers.io())
-//                .observeOn(AndroidSchedulers.mainThread())
-//                .subscribe(new Action1<QQUser>() {
-//                    @Override
-//                    public void call(QQUser qqUser) {
-//                        mLoginListener.loginSuccess(
-//                                new LoginResult(LoginPlatform.QQ, token, qqUser));
-//                    }
-//                }, new Action1<Throwable>() {
-//                    @Override
-//                    public void call(Throwable throwable) {
-//                        mLoginListener.loginFailure(new Exception(throwable));
-//                    }
-//                });
+        }, BackpressureStrategy.DROP)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Consumer<QQUser>() {
+                    @Override
+                    public void accept(QQUser qqUser) throws Exception {
+                        mLoginListener.loginSuccess(
+                                new LoginResult(LoginPlatform.QQ, token, qqUser));
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        mLoginListener.loginFailure(new Exception(throwable));
+                    }
+                });
     }
 
     private String buildUserInfoUrl(BaseToken token, String base) {

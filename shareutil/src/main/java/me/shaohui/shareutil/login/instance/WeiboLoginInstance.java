@@ -15,8 +15,6 @@ import com.sina.weibo.sdk.exception.WeiboException;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 
 import java.io.IOException;
 
@@ -25,6 +23,7 @@ import io.reactivex.Flowable;
 import io.reactivex.FlowableEmitter;
 import io.reactivex.FlowableOnSubscribe;
 import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.functions.Consumer;
 import io.reactivex.schedulers.Schedulers;
 import me.shaohui.shareutil.ShareLogger;
 import me.shaohui.shareutil.ShareManager;
@@ -62,7 +61,7 @@ public class WeiboLoginInstance extends LoginInstance {
 
     @Override
     public void doLogin(Activity activity, final LoginListener listener,
-            final boolean fetchUserInfo) {
+                        final boolean fetchUserInfo) {
         mSsoHandler.authorize(new WeiboAuthListener() {
             @Override
             public void onComplete(Bundle bundle) {
@@ -93,7 +92,7 @@ public class WeiboLoginInstance extends LoginInstance {
     @Override
     public void fetchUserInfo(final BaseToken token) {
 
-        Flowable<WeiboUser> flowable = Flowable.create(new FlowableOnSubscribe<WeiboUser>() {
+        Flowable.create(new FlowableOnSubscribe<WeiboUser>() {
             @Override
             public void subscribe(FlowableEmitter<WeiboUser> weiboUserEmitter) throws Exception {
                 OkHttpClient client = new OkHttpClient();
@@ -109,66 +108,22 @@ public class WeiboLoginInstance extends LoginInstance {
                     weiboUserEmitter.onError(e);
                 }
             }
-        }, BackpressureStrategy.DROP);
+        }, BackpressureStrategy.DROP)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Consumer<WeiboUser>() {
+                    @Override
+                    public void accept(WeiboUser weiboUser) throws Exception {
+                        mLoginListener.loginSuccess(
+                                new LoginResult(LoginPlatform.WEIBO, token, weiboUser));
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        mLoginListener.loginFailure(new Exception(throwable));
+                    }
+                });
 
-        flowable.subscribeOn(Schedulers.io());
-        flowable.observeOn(AndroidSchedulers.mainThread());
-        flowable.subscribe(new Subscriber<WeiboUser>() {
-            @Override
-            public void onSubscribe(Subscription s) {
-
-            }
-
-            @Override
-            public void onNext(WeiboUser weiboUser) {
-                mLoginListener.loginSuccess(
-                        new LoginResult(LoginPlatform.WEIBO, token, weiboUser));
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                mLoginListener.loginFailure(new Exception(throwable));
-            }
-
-            @Override
-            public void onComplete() {
-
-            }
-        });
-
-
-
-//        Observable.fromEmitter(new Action1<Emitter<WeiboUser>>() {
-//            @Override
-//            public void call(Emitter<WeiboUser> weiboUserEmitter) {
-//                OkHttpClient client = new OkHttpClient();
-//                Request request =
-//                        new Request.Builder().url(buildUserInfoUrl(token, USER_INFO)).build();
-//                try {
-//                    Response response = client.newCall(request).execute();
-//                    JSONObject jsonObject = new JSONObject(response.body().string());
-//                    WeiboUser user = WeiboUser.parse(jsonObject);
-//                    weiboUserEmitter.onNext(user);
-//                } catch (IOException | JSONException e) {
-//                    ShareLogger.e(INFO.FETCH_USER_INOF_ERROR);
-//                    weiboUserEmitter.onError(e);
-//                }
-//            }
-//        }, Emitter.BackpressureMode.DROP)
-//                .subscribeOn(Schedulers.io())
-//                .observeOn(AndroidSchedulers.mainThread())
-//                .subscribe(new Action1<WeiboUser>() {
-//                    @Override
-//                    public void call(WeiboUser weiboUser) {
-//                        mLoginListener.loginSuccess(
-//                                new LoginResult(LoginPlatform.WEIBO, token, weiboUser));
-//                    }
-//                }, new Action1<Throwable>() {
-//                    @Override
-//                    public void call(Throwable throwable) {
-//                        mLoginListener.loginFailure(new Exception(throwable));
-//                    }
-//                });
     }
 
     private String buildUserInfoUrl(BaseToken token, String baseUrl) {
